@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Audio Debug</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .panel {
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .log {
+      background-color: #000;
+      color: #0f0;
+      font-family: monospace;
+      padding: 10px;
+      height: 300px;
+      overflow-y: auto;
+      border-radius: 4px;
+    }
+    h3 {
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebRTC Audio Debug Page</h1>
+  
+  <div class="panel">
+    <h3>Audio Testing</h3>
+    <button id="play-tone">Play 440Hz Tone</button>
+    <button id="play-tone-1000">Play 1000Hz Tone</button>
+    <button id="stop-tone">Stop Tone</button>
+    <p>Volume: <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5"></p>
+  </div>
+  
+  <div class="panel">
+    <h3>WebRTC Audio Setup</h3>
+    <button id="request-mic">Request Microphone</button>
+    <button id="release-mic">Release Microphone</button>
+    <button id="select-output">Select Audio Output</button>
+  </div>
+  
+  <div class="panel">
+    <h3>Audio Output Info</h3>
+    <div id="devices-info"></div>
+  </div>
+  
+  <div class="panel">
+    <h3>Log</h3>
+    <div class="log" id="log"></div>
+  </div>
+  
+  <script>
+    // UI Elements
+    const playToneBtn = document.getElementById('play-tone');
+    const playTone1000Btn = document.getElementById('play-tone-1000');
+    const stopToneBtn = document.getElementById('stop-tone');
+    const volumeControl = document.getElementById('volume');
+    const requestMicBtn = document.getElementById('request-mic');
+    const releaseMicBtn = document.getElementById('release-mic');
+    const selectOutputBtn = document.getElementById('select-output');
+    const devicesInfo = document.getElementById('devices-info');
+    const logElement = document.getElementById('log');
+    
+    // Global variables
+    let audioContext = null;
+    let oscillator = null;
+    let gainNode = null;
+    let localStream = null;
+    
+    // Logging function
+    function log(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.textContent = `${timestamp}: ${message}`;
+      logElement.appendChild(entry);
+      logElement.scrollTop = logElement.scrollHeight;
+      console.log(message);
+    }
+    
+    // Initialize audio context
+    function initAudioContext() {
+      if (!audioContext) {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioContext = new AudioContext();
+          log(`Audio context created. State: ${audioContext.state}, Sample rate: ${audioContext.sampleRate}`);
+          
+          // Create gain node
+          gainNode = audioContext.createGain();
+          gainNode.gain.value = volumeControl.value;
+          gainNode.connect(audioContext.destination);
+        } catch (e) {
+          log(`Error creating audio context: ${e.message}`);
+        }
+      }
+      return audioContext;
+    }
+    
+    // Play tone
+    function playTone(frequency = 440) {
+      const ctx = initAudioContext();
+      if (!ctx) return;
+      
+      if (oscillator) {
+        stopTone();
+      }
+      
+      try {
+        oscillator = ctx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = frequency;
+        oscillator.connect(gainNode);
+        oscillator.start();
+        log(`Playing ${frequency}Hz tone with volume ${gainNode.gain.value}`);
+      } catch (e) {
+        log(`Error playing tone: ${e.message}`);
+      }
+    }
+    
+    // Stop tone
+    function stopTone() {
+      if (oscillator) {
+        try {
+          oscillator.stop();
+          oscillator.disconnect();
+          oscillator = null;
+          log('Tone stopped');
+        } catch (e) {
+          log(`Error stopping tone: ${e.message}`);
+        }
+      }
+    }
+    
+    // Enumerate audio devices
+    async function listAudioDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        devicesInfo.innerHTML = '';
+        
+        const audioDevices = devices.filter(device => 
+          device.kind === 'audioinput' || device.kind === 'audiooutput');
+        
+        if (audioDevices.length === 0) {
+          devicesInfo.textContent = 'No audio devices found';
+          return;
+        }
+        
+        audioDevices.forEach(device => {
+          const deviceEl = document.createElement('div');
+          deviceEl.textContent = `${device.kind}: ${device.label || 'Unnamed device'} (${device.deviceId.substring(0, 8)}...)`;
+          devicesInfo.appendChild(deviceEl);
+        });
+        
+        log(`Found ${audioDevices.length} audio devices`);
+      } catch (e) {
+        log(`Error listing devices: ${e.message}`);
+      }
+    }
+    
+    // Request microphone
+    async function requestMicrophone() {
+      try {
+        if (localStream) {
+          log('Releasing existing microphone stream first');
+          releaseMicrophone();
+        }
+        
+        const constraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        };
+        
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const audioTracks = localStream.getAudioTracks();
+        
+        log(`Microphone access granted: ${audioTracks.length} audio tracks`);
+        if (audioTracks.length > 0) {
+          const settings = audioTracks[0].getSettings();
+          log(`Mic settings: ${JSON.stringify(settings)}`);
+        }
+        
+        // Create audio element to monitor microphone
+        const audioElement = document.createElement('audio');
+        audioElement.srcObject = localStream;
+        audioElement.muted = true; // Prevent feedback
+        audioElement.play();
+        
+        // List devices after permission is granted
+        listAudioDevices();
+      } catch (e) {
+        log(`Error accessing microphone: ${e.message}`);
+      }
+    }
+    
+    // Release microphone
+    function releaseMicrophone() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          track.stop();
+          log(`Stopped track: ${track.kind}`);
+        });
+        localStream = null;
+      }
+    }
+    
+    // Select audio output device
+    async function selectAudioOutput() {
+      if (navigator.mediaDevices.selectAudioOutput) {
+        try {
+          const device = await navigator.mediaDevices.selectAudioOutput();
+          log(`Selected audio output: ${device.label} (${device.deviceId.substring(0, 8)}...)`);
+          
+          // Create a test audio element and set sink ID
+          const audio = new Audio();
+          if (audio.setSinkId) {
+            await audio.setSinkId(device.deviceId);
+            log(`Audio sink set to selected device`);
+            
+            // Play a test tone
+            audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            audio.volume = volumeControl.value;
+            await audio.play();
+            log(`Test tone playing on selected device`);
+          } else {
+            log('setSinkId not supported by browser');
+          }
+        } catch (e) {
+          log(`Error selecting audio output: ${e.message}`);
+        }
+      } else {
+        log('selectAudioOutput API not supported by this browser');
+      }
+    }
+    
+    // Event listeners
+    playToneBtn.addEventListener('click', () => playTone(440));
+    playTone1000Btn.addEventListener('click', () => playTone(1000));
+    stopToneBtn.addEventListener('click', stopTone);
+    
+    volumeControl.addEventListener('input', () => {
+      if (gainNode) {
+        gainNode.gain.value = volumeControl.value;
+        log(`Volume set to ${volumeControl.value}`);
+      }
+    });
+    
+    requestMicBtn.addEventListener('click', requestMicrophone);
+    releaseMicBtn.addEventListener('click', releaseMicrophone);
+    selectOutputBtn.addEventListener('click', selectAudioOutput);
+    
+    // Initialize
+    window.addEventListener('load', () => {
+      log('Debug page loaded');
+      if (navigator.mediaDevices) {
+        navigator.mediaDevices.enumerateDevices()
+          .then(devices => {
+            const audioDevices = devices.filter(device => 
+              device.kind === 'audioinput' || device.kind === 'audiooutput');
+            
+            log(`Found ${audioDevices.length} audio devices`);
+            
+            if (audioDevices.some(device => device.label)) {
+              // If we already have permissions, show detailed info
+              listAudioDevices();
+            } else {
+              log('No device labels available. Request microphone access to see full device info.');
+            }
+          })
+          .catch(err => log(`Error listing devices: ${err.message}`));
+      } else {
+        log('MediaDevices API not supported by this browser');
+      }
+      
+      if (!window.AudioContext && !window.webkitAudioContext) {
+        log('AudioContext not supported by this browser!');
+      }
+    });
+  </script>
+</body>
+</html> 

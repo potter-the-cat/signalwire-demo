@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Test Page</h1>
+    <p>This page helps you verify that your audio output is working correctly.</p>
+    
+    <div>
+        <button id="playTone">Play Test Tone</button>
+        <button id="playRingtone">Play Ringtone</button>
+        <button id="stopAudio">Stop Audio</button>
+    </div>
+    
+    <div class="result" id="result">
+        Click a button to test audio
+    </div>
+    
+    <script>
+        let audioContext = null;
+        let oscillator = null;
+        let ringtone = null;
+        
+        // Initialize audio context on user interaction
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                document.getElementById('result').textContent = 'Audio context created: ' + audioContext.state;
+                
+                // If the context is suspended, try to resume it
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        document.getElementById('result').textContent = 'Audio context resumed: ' + audioContext.state;
+                    });
+                }
+            }
+            return audioContext;
+        }
+        
+        // Play a simple tone
+        document.getElementById('playTone').addEventListener('click', function() {
+            stopAllAudio();
+            
+            try {
+                const context = initAudioContext();
+                oscillator = context.createOscillator();
+                const gainNode = context.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
+                gainNode.gain.setValueAtTime(0.5, context.currentTime);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(context.destination);
+                
+                oscillator.start();
+                document.getElementById('result').textContent = 'Playing test tone (440Hz)';
+                
+                // Automatically stop after 2 seconds
+                setTimeout(() => {
+                    if (oscillator) {
+                        oscillator.stop();
+                        oscillator = null;
+                        document.getElementById('result').textContent = 'Test tone stopped';
+                    }
+                }, 2000);
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error playing tone: ' + error.message;
+            }
+        });
+        
+        // Play a ringtone
+        document.getElementById('playRingtone').addEventListener('click', function() {
+            stopAllAudio();
+            
+            try {
+                // Initialize the audio context to ensure audio output is enabled
+                initAudioContext();
+                
+                ringtone = new Audio('https://freesound.org/data/previews/415/415514_5121236-lq.mp3');
+                ringtone.volume = 0.7;
+                ringtone.loop = true;
+                
+                ringtone.play().then(() => {
+                    document.getElementById('result').textContent = 'Playing ringtone';
+                }).catch(error => {
+                    document.getElementById('result').textContent = 'Error playing ringtone: ' + error.message;
+                });
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error playing ringtone: ' + error.message;
+            }
+        });
+        
+        // Stop all audio
+        document.getElementById('stopAudio').addEventListener('click', function() {
+            stopAllAudio();
+            document.getElementById('result').textContent = 'All audio stopped';
+        });
+        
+        // Helper function to stop all audio
+        function stopAllAudio() {
+            if (oscillator) {
+                oscillator.stop();
+                oscillator = null;
+            }
+            
+            if (ringtone) {
+                ringtone.pause();
+                ringtone.currentTime = 0;
+                ringtone = null;
+            }
+        }
+    </script>
+</body>
+</html> 

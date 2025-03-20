@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignalWire WebRTC Phone</title>
+  <!-- Import SignalWire WebRTC client libraries - try multiple versions -->
+  <script src="https://webrtc.signalwire.com/api.min.js"></script>
+  <script src="https://cdn.signalwire.com/libs/js/relay/relay.js"></script>
+  <script src="https://cdn.signalwire.com/js/webrtc/1.14.0/signalwire.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .call-container {
+      border: 1px solid #ccc;
+      padding: 20px;
+      border-radius: 5px;
+      margin-top: 20px;
+      background-color: #f9f9f9;
+    }
+    .call-info {
+      display: none;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #e8f4ff;
+      border-radius: 4px;
+    }
+    .call-status {
+      font-weight: bold;
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 15px;
+      margin-right: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .answer-btn {
+      background-color: #4CAF50;
+      color: white;
+      font-size: 16px;
+      padding: 12px 18px;
+    }
+    .hangup-btn {
+      background-color: #f44336;
+      color: white;
+      font-size: 16px;
+      padding: 12px 18px;
+    }
+    .hidden {
+      display: none;
+    }
+    .mic-permission {
+      background-color: #fffde7;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .call-label {
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    #video-container {
+      width: 100%;
+      margin-top: 20px;
+    }
+    .audio-controls {
+      background-color: #f0f8ff;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 15px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .control-row label {
+      width: 120px;
+      display: inline-block;
+    }
+    .test-btn {
+      background-color: #2196F3;
+      color: white;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>SignalWire WebRTC Phone</h1>
+  <p>This page will receive incoming calls from SignalWire Relay.</p>
+  
+  <div class="mic-permission">
+    <p><strong>Note:</strong> This app requires microphone access to answer calls. Please allow microphone access when prompted.</p>
+  </div>
+  
+  <div class="call-container">
+    <div class="call-status">Status: Ready to receive calls</div>
+    
+    <div id="call-info" class="call-info">
+      <p><span class="call-label">Incoming call from:</span> <span id="caller-id">Unknown</span></p>
+      <p><span class="call-label">To:</span> <span id="called-number">Unknown</span></p>
+      
+      <div class="audio-controls">
+        <p><strong>Audio Settings:</strong></p>
+        <div class="control-row">
+          <label for="volume">Speaker Volume:</label>
+          <input type="range" id="volume" min="0" max="1" step="0.1" value="0.7">
+        </div>
+        <button id="test-audio" class="test-btn">Test Speaker</button>
+      </div>
+    </div>
+    
+    <div id="call-buttons">
+      <button id="answer-btn" class="answer-btn hidden">Answer Call</button>
+      <button id="hangup-btn" class="hangup-btn hidden">Hang Up</button>
+    </div>
+    
+    <div id="video-container"></div>
+  </div>
+
+  <!-- Import Socket.IO client -->
+  <script src="/socket.io/socket.io.js"></script>
+  
+  <!-- Import our client.js file -->
+  <script src="/client.js"></script>
+</body>
+</html> 

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Audio Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 12px 15px;
+      margin: 5px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      background-color: #2196F3;
+      color: white;
+    }
+    button:hover {
+      background-color: #0b7dda;
+    }
+    .panel {
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .log {
+      background-color: #000;
+      color: #0f0;
+      font-family: monospace;
+      padding: 10px;
+      height: 200px;
+      overflow-y: auto;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+    h3 {
+      margin-top: 0;
+    }
+    audio {
+      width: 100%;
+      margin: 10px 0;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebRTC Audio Test for SignalWire</h1>
+  <p>This page tests if your browser can properly handle WebRTC audio streams.</p>
+  
+  <div class="panel">
+    <h3>1. Basic Audio Test</h3>
+    <p>First, let's make sure your speakers are working properly:</p>
+    <button id="play-test-tone">Play Test Tone</button>
+    <button id="play-music">Play Music Sample</button>
+    <div id="basic-audio-result"></div>
+  </div>
+  
+  <div class="panel">
+    <h3>2. WebRTC Audio Pipeline Test</h3>
+    <p>Now let's test the full WebRTC audio pipeline:</p>
+    <button id="test-webrtc">Test WebRTC Audio Pipeline</button>
+    <div id="webrtc-result"></div>
+    <audio id="remote-audio" controls></audio>
+  </div>
+  
+  <div class="panel">
+    <h3>3. Audio Output Device</h3>
+    <button id="select-output">Select Audio Output Device</button>
+    <div id="current-device"></div>
+  </div>
+  
+  <div class="panel">
+    <h3>Results Log</h3>
+    <div class="log" id="log"></div>
+  </div>
+  
+  <script>
+    // UI Elements
+    const playTestToneBtn = document.getElementById('play-test-tone');
+    const playMusicBtn = document.getElementById('play-music');
+    const testWebRTCBtn = document.getElementById('test-webrtc');
+    const selectOutputBtn = document.getElementById('select-output');
+    const basicAudioResult = document.getElementById('basic-audio-result');
+    const webrtcResult = document.getElementById('webrtc-result');
+    const currentDevice = document.getElementById('current-device');
+    const remoteAudio = document.getElementById('remote-audio');
+    const logElement = document.getElementById('log');
+    
+    // Global variables
+    let localConnection;
+    let remoteConnection;
+    let localStream;
+    let sendChannel;
+    let receiveChannel;
+    let audioContext;
+    
+    // Logging function
+    function log(message, isError = false) {
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.textContent = `${timestamp}: ${message}`;
+      if (isError) {
+        entry.classList.add('error');
+      }
+      logElement.appendChild(entry);
+      logElement.scrollTop = logElement.scrollHeight;
+      console.log(message);
+    }
+    
+    // Play test tone
+    playTestToneBtn.addEventListener('click', () => {
+      basicAudioResult.innerHTML = '';
+      
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+        
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 440; // A4 note
+        gainNode.gain.value = 0.5;
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        
+        log('Playing test tone (440Hz)');
+        basicAudioResult.innerHTML = '<p class="success">Test tone playing. Can you hear it?</p>';
+        
+        // Stop after 2 seconds
+        setTimeout(() => {
+          oscillator.stop();
+          log('Test tone stopped');
+        }, 2000);
+      } catch (e) {
+        log(`Error playing test tone: ${e.message}`, true);
+        basicAudioResult.innerHTML = `<p class="error">Error: ${e.message}</p>`;
+      }
+    });
+    
+    // Play music sample
+    playMusicBtn.addEventListener('click', () => {
+      basicAudioResult.innerHTML = '';
+      
+      try {
+        const audio = new Audio();
+        // Use a more reliable public domain audio sample
+        audio.src = 'https://www2.cs.uic.edu/~i101/SoundFiles/StarWars60.wav';
+        audio.volume = 1.0;
+        
+        log('Attempting to play music sample');
+        
+        audio.oncanplaythrough = () => {
+          log('Music sample loaded and ready to play');
+        };
+        
+        audio.onplay = () => {
+          log('Music sample is now playing');
+          basicAudioResult.innerHTML = '<p class="success">Music sample playing. Can you hear it?</p>';
+        };
+        
+        audio.onerror = (e) => {
+          log(`Audio playback error: ${audio.error ? audio.error.message : 'Unknown error'}`, true);
+          
+          // Try a fallback sample
+          log('Trying fallback audio sample...');
+          audio.src = 'https://bigsoundbank.com/UPLOAD/mp3/1482.mp3';
+          audio.play()
+            .then(() => {
+              log('Fallback sample playing');
+              basicAudioResult.innerHTML = '<p class="success">Fallback music sample playing. Can you hear it?</p>';
+            })
+            .catch(fallbackErr => {
+              log(`Fallback audio failed: ${fallbackErr.message}`, true);
+              basicAudioResult.innerHTML = `<p class="error">Error playing both audio samples. Browser may be blocking audio.</p>`;
+            });
+        };
+        
+        const playPromise = audio.play();
+        if (playPromise) {
+          playPromise.catch(e => {
+            log(`Error starting music playback: ${e.message}`, true);
+            basicAudioResult.innerHTML = `<p class="error">Error: ${e.message}. Try clicking again.</p>`;
+          });
+        }
+      } catch (e) {
+        log(`Error setting up music playback: ${e.message}`, true);
+        basicAudioResult.innerHTML = `<p class="error">Error: ${e.message}</p>`;
+      }
+    });
+    
+    // Test WebRTC audio pipeline
+    testWebRTCBtn.addEventListener('click', async () => {
+      webrtcResult.innerHTML = '';
+      
+      try {
+        // Clean up previous test if any
+        await stopWebRTCTest();
+        
+        log('Starting WebRTC audio pipeline test');
+        
+        // Create a self-connecting WebRTC pipeline (loopback)
+        // This simulates a WebRTC call within a single page
+        
+        // 1. Get local media stream
+        log('Requesting audio from microphone...');
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }, 
+          video: false 
+        });
+        
+        log('Microphone access granted');
+        
+        // 2. Create WebRTC peer connections
+        log('Creating RTCPeerConnection objects');
+        localConnection = new RTCPeerConnection();
+        remoteConnection = new RTCPeerConnection();
+        
+        // 3. Add the local stream to local connection
+        localStream.getTracks().forEach(track => {
+          log(`Adding ${track.kind} track to local connection`);
+          localConnection.addTrack(track, localStream);
+        });
+        
+        // 4. Set up event handlers for ICE candidates
+        localConnection.onicecandidate = e => {
+          if (e.candidate) {
+            log('Local ICE candidate found');
+            remoteConnection.addIceCandidate(e.candidate)
+              .catch(err => log(`Error adding ICE candidate: ${err}`, true));
+          }
+        };
+        
+        remoteConnection.onicecandidate = e => {
+          if (e.candidate) {
+            log('Remote ICE candidate found');
+            localConnection.addIceCandidate(e.candidate)
+              .catch(err => log(`Error adding ICE candidate: ${err}`, true));
+          }
+        };
+        
+        // 5. Handle incoming tracks
+        remoteConnection.ontrack = e => {
+          log(`Received ${e.track.kind} track from remote connection`);
+          remoteAudio.srcObject = new MediaStream([e.track]);
+          
+          log('Remote audio stream connected to audio element');
+          webrtcResult.innerHTML = '<p class="success">WebRTC audio pipeline established. You should hear your own microphone with slight delay.</p>';
+        };
+        
+        // 6. Create and set local description
+        log('Creating offer...');
+        const offer = await localConnection.createOffer();
+        await localConnection.setLocalDescription(offer);
+        
+        log('Setting remote description on remote connection...');
+        await remoteConnection.setRemoteDescription(offer);
+        
+        // 7. Create answer
+        log('Creating answer...');
+        const answer = await remoteConnection.createAnswer();
+        await remoteConnection.setLocalDescription(answer);
+        
+        log('Setting remote description on local connection...');
+        await localConnection.setRemoteDescription(answer);
+        
+        log('WebRTC pipeline setup complete, waiting for connection...');
+        
+      } catch (e) {
+        log(`Error in WebRTC test: ${e.message}`, true);
+        webrtcResult.innerHTML = `<p class="error">WebRTC Error: ${e.message}</p>`;
+        await stopWebRTCTest();
+      }
+    });
+    
+    // Stop WebRTC test
+    async function stopWebRTCTest() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      if (localConnection) {
+        localConnection.close();
+        localConnection = null;
+      }
+      
+      if (remoteConnection) {
+        remoteConnection.close();
+        remoteConnection = null;
+      }
+      
+      if (remoteAudio.srcObject) {
+        remoteAudio.srcObject = null;
+      }
+      
+      log('WebRTC test stopped, all resources released');
+    }
+    
+    // Select audio output device
+    selectOutputBtn.addEventListener('click', async () => {
+      if (navigator.mediaDevices.selectAudioOutput) {
+        try {
+          log('Requesting user to select audio output device...');
+          const device = await navigator.mediaDevices.selectAudioOutput();
+          
+          log(`Audio output device selected: ${device.label}`);
+          currentDevice.innerHTML = `<p>Current device: ${device.label}</p>`;
+          
+          // Apply to remote audio element
+          if (remoteAudio.setSinkId) {
+            await remoteAudio.setSinkId(device.deviceId);
+            log('Applied selected device to audio element');
+          } else {
+            log('setSinkId API not available', true);
+          }
+        } catch (e) {
+          log(`Error selecting audio output: ${e.message}`, true);
+        }
+      } else {
+        log('selectAudioOutput API is not supported by this browser', true);
+        currentDevice.innerHTML = '<p class="error">Your browser does not support selecting audio output devices</p>';
+      }
+    });
+    
+    // Check browser capabilities on load
+    window.addEventListener('load', () => {
+      log('Page loaded, checking browser capabilities');
+      
+      // Check AudioContext support
+      if (window.AudioContext || window.webkitAudioContext) {
+        log('AudioContext is supported');
+      } else {
+        log('AudioContext is NOT supported - audio output may not work', true);
+      }
+      
+      // Check WebRTC support
+      if (window.RTCPeerConnection) {
+        log('RTCPeerConnection is supported');
+      } else {
+        log('RTCPeerConnection is NOT supported - WebRTC will not work', true);
+      }
+      
+      // Check audio output selection support
+      if (navigator.mediaDevices) {
+        if (navigator.mediaDevices.selectAudioOutput) {
+          log('selectAudioOutput API is supported');
+        } else {
+          log('selectAudioOutput API is NOT supported - cannot change audio output device', true);
+        }
+        
+        // Check setSinkId support
+        if (HTMLAudioElement.prototype.setSinkId) {
+          log('setSinkId API is supported');
+        } else {
+          log('setSinkId API is NOT supported - cannot route audio to specific devices', true);
+        }
+      } else {
+        log('mediaDevices API is NOT supported - audio permissions may not work', true);
+      }
+      
+      log('Browser capability check complete');
+    });
+  </script>
+</body>
+</html> 
